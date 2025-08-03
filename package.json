@@ -1,0 +1,65 @@
+{
+  "name": "@skierkowski/logger",
+  "version": "0.0.1",
+  "description": "Simple logging library with pretty formatting in development and JSONL in production",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist",
+    "prepare": "npm run clean && npm run build",
+    "prepublishOnly": "npm run build",
+    "lint": "eslint src/**/*.ts examples/**/*.js",
+    "lint:fix": "eslint src/**/*.ts examples/**/*.js --fix",
+    "format": "prettier --write src/**/*.ts examples/**/*.js",
+    "format:check": "prettier --check src/**/*.ts examples/**/*.js",
+    "examples": "npm run examples:basic && npm run examples:levels && npm run examples:services && npm run examples:metadata && npm run examples:production && npm run examples:errors",
+    "examples:basic": "node examples/basic-usage.js",
+    "examples:levels": "node examples/log-levels.js",
+    "examples:services": "node examples/service-ids.js",
+    "examples:metadata": "node examples/metadata.js",
+    "examples:production": "node examples/production-mode.js",
+    "examples:errors": "node examples/error-handling.js"
+  },
+  "repository": "https://github.com/skierkowski/logger",
+  "author": "Maciej Skierkowski",
+  "license": "MIT",
+  "private": false,
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^20.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.38.0",
+    "@typescript-eslint/parser": "^8.38.0",
+    "eslint": "^9.32.0",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.6.2",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=16"
+  },
+  "keywords": [
+    "logger",
+    "logging",
+    "typescript",
+    "json",
+    "pretty",
+    "yaml",
+    "chalk",
+    "colors"
+  ],
+  "dependencies": {
+    "chalk": "^4.1.2",
+    "js-yaml": "^4.1.0"
+  }
+}
