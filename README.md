@@ -45,7 +45,7 @@ error("Something went wrong");
 ### Creating Custom Logger
 
 ```typescript
-import Logger from "@skierkowski/logger";
+import { Logger } from "@skierkowski/logger";
 
 const customLogger = new Logger({
   level: "DEBUG",
@@ -60,7 +60,7 @@ customLogger.debug("Debug message");
 ### Using Service IDs
 
 ```typescript
-import Logger from "@skierkowski/logger";
+import { Logger } from "@skierkowski/logger";
 
 // Create loggers for different services
 const dbLogger = new Logger({ id: "DB" });
