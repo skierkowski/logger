@@ -34,9 +34,10 @@ logger.error("Something went wrong");
 ### Using Convenience Functions
 
 ```typescript
-import { info, warn, error } from "@skierkowski/logger";
+import { info, success, warn, error } from "@skierkowski/logger";
 
 info("Application started");
+success("Operation completed successfully");
 warn("This is a warning");
 error("Something went wrong");
 ```
@@ -126,7 +127,7 @@ appLogger.error(new Error('Failed'));               // → "APP: Failed"
 
 ## Configuration Options
 
-- `level`: Log level ('DEBUG' | 'INFO' | 'WARN' | 'ERROR')
+- `level`: Log level ('DEBUG' | 'INFO' | 'SUCCESS' | 'WARN' | 'ERROR')
 - `pretty`: Enable pretty formatting (default: `true` in development, `false` in production)
 - `timestamp`: Include timestamps (default: `true`)
 - `id`: Service/component identifier (optional, appears white & bold in pretty mode)
@@ -143,7 +144,8 @@ appLogger.error(new Error('Failed'));               // → "APP: Failed"
     theme: dark
     notifications: true
 
-2025-08-03 12:00:01.456 WARN  API: Rate limit warning
+2025-08-03 12:00:01.456 SUCCESS API: Database backup completed
+2025-08-03 12:00:02.123 WARN  API: Rate limit warning
 2025-08-03 12:00:02.789 ERROR DB: Connection failed
 ```
 

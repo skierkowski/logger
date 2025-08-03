@@ -4,6 +4,7 @@ import * as yaml from 'js-yaml';
 export interface LogLevel {
   DEBUG: number;
   INFO: number;
+  SUCCESS: number;
   WARN: number;
   ERROR: number;
 }
@@ -11,8 +12,9 @@ export interface LogLevel {
 export const LOG_LEVELS: LogLevel = {
   DEBUG: 0,
   INFO: 1,
-  WARN: 2,
-  ERROR: 3,
+  SUCCESS: 2,
+  WARN: 3,
+  ERROR: 4,
 } as const;
 
 export type LogLevelName = keyof LogLevel;
@@ -30,6 +32,15 @@ export interface LogEntry {
   timestamp: string;
   id?: string;
   [key: string]: any;
+}
+
+// Constants
+const YAML_INDENT = 2;
+const OUTPUT_INDENT = '  ';
+
+// Type for error with optional cause
+interface ErrorWithCause extends Error {
+  cause?: unknown;
 }
 
 export class Logger {
@@ -54,62 +65,19 @@ export class Logger {
       return;
     }
 
-    let message: string;
-    let finalMeta = { ...meta };
-
-    if (messageOrError instanceof Error) {
-      message = messageOrError.message;
-
-      // Special case: logger.error(err) with no additional metadata
-      if (level === 'ERROR' && Object.keys(meta).length === 0) {
-        finalMeta = {
-          stack: messageOrError.stack,
-          ...((messageOrError as any).cause && {
-            cause:
-              (messageOrError as any).cause instanceof Error
-                ? {
-                    name: (messageOrError as any).cause.name,
-                    message: (messageOrError as any).cause.message,
-                    stack: (messageOrError as any).cause.stack,
-                  }
-                : (messageOrError as any).cause,
-          }),
-          __isErrorOnly: true, // Internal flag for prettyLog
-        };
-      } else {
-        // Normal case: nest under 'error' field
-        finalMeta = {
-          error: {
-            name: messageOrError.name,
-            message: messageOrError.message,
-            stack: messageOrError.stack,
-            ...((messageOrError as any).cause && {
-              cause: (messageOrError as any).cause,
-            }),
-          },
-          ...meta,
-        };
-      }
-    } else {
-      message = messageOrError;
-    }
-
-    // Use error type as prefix if no id is set and it's an error-only case
-    let entryId = this.id;
-    if (
-      !entryId &&
-      finalMeta.__isErrorOnly &&
-      messageOrError instanceof Error
-    ) {
-      entryId = messageOrError.name;
-    }
+    const { message, processedMeta } = this.processMessageAndMeta(
+      messageOrError,
+      meta,
+      level
+    );
+    const entryId = this.determineEntryId(processedMeta, messageOrError);
 
     const entry: LogEntry = {
       level,
       message,
       timestamp: new Date().toISOString(),
       ...(entryId && { id: entryId }),
-      ...finalMeta,
+      ...processedMeta,
     };
 
     if (this.pretty) {
@@ -119,50 +87,134 @@ export class Logger {
     }
   }
 
+  private processMessageAndMeta(
+    messageOrError: string | Error,
+    meta: Record<string, any>,
+    level: LogLevelName
+  ): { message: string; processedMeta: Record<string, any> } {
+    if (!(messageOrError instanceof Error)) {
+      return { message: messageOrError, processedMeta: { ...meta } };
+    }
+
+    const message = messageOrError.message;
+    const isErrorOnly = level === 'ERROR' && Object.keys(meta).length === 0;
+
+    if (isErrorOnly) {
+      const cause = this.processCause(messageOrError as ErrorWithCause);
+      const processedMeta: Record<string, any> = {
+        stack: messageOrError.stack,
+        __isErrorOnly: true,
+      };
+      if (cause) {
+        processedMeta.cause = cause;
+      }
+      return { message, processedMeta };
+    }
+
+    const cause = this.extractCause(messageOrError as ErrorWithCause);
+    const errorData: Record<string, any> = {
+      name: messageOrError.name,
+      message: messageOrError.message,
+      stack: messageOrError.stack,
+    };
+    if (cause) {
+      errorData.cause = cause;
+    }
+
+    return {
+      message,
+      processedMeta: {
+        error: errorData,
+        ...meta,
+      },
+    };
+  }
+
+  private processCause(error: ErrorWithCause): any {
+    if (!error.cause) return null;
+
+    return error.cause instanceof Error
+      ? {
+          name: error.cause.name,
+          message: error.cause.message,
+          stack: error.cause.stack,
+        }
+      : error.cause;
+  }
+
+  private extractCause(error: ErrorWithCause): unknown {
+    return error.cause || null;
+  }
+
+  private determineEntryId(
+    meta: Record<string, any>,
+    messageOrError: string | Error
+  ): string | undefined {
+    if (this.id) return this.id;
+
+    if (meta.__isErrorOnly && messageOrError instanceof Error) {
+      return messageOrError.name;
+    }
+
+    return undefined;
+  }
+
   private prettyLog(entry: LogEntry): void {
-    // Format timestamp as YYYY-MM-DD HH:MM:SS.sss
-    let formattedTimestamp = '';
-    if (this.timestamp) {
-      const date = new Date(entry.timestamp);
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const day = String(date.getDate()).padStart(2, '0');
-      const hours = String(date.getHours()).padStart(2, '0');
-      const minutes = String(date.getMinutes()).padStart(2, '0');
-      const seconds = String(date.getSeconds()).padStart(2, '0');
-      const milliseconds = String(date.getMilliseconds()).padStart(3, '0');
-      formattedTimestamp =
-        chalk.gray(
-          `${year}-${month}-${day} ${hours}:${minutes}:${seconds}.${milliseconds}`
-        ) + ' ';
+    const timestamp = this.formatTimestamp(entry.timestamp);
+    const level = this.formatLevel(entry.level);
+    const idSuffix = this.formatIdSuffix(entry.id);
+
+    let output = `${timestamp}${level}${idSuffix} ${entry.message}`;
+
+    const meta = this.extractMetadata(entry);
+    if (Object.keys(meta).length > 0) {
+      output += this.formatMetadata(meta, entry);
     }
 
-    // Format level without brackets, padded for alignment
-    const level = entry.level.padEnd(5);
-    let coloredLevel: string;
-    switch (entry.level) {
+    console.log(output);
+  }
+
+  private formatTimestamp(timestamp: string): string {
+    if (!this.timestamp) return '';
+
+    const date = new Date(timestamp);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+    const milliseconds = String(date.getMilliseconds()).padStart(3, '0');
+
+    return (
+      chalk.gray(
+        `${year}-${month}-${day} ${hours}:${minutes}:${seconds}.${milliseconds}`
+      ) + ' '
+    );
+  }
+
+  private formatLevel(level: LogLevelName): string {
+    switch (level) {
       case 'DEBUG':
-        coloredLevel = chalk.cyan(level);
-        break;
+        return chalk.cyan(level);
       case 'INFO':
-        coloredLevel = chalk.green(level);
-        break;
+        return chalk.blue(level);
+      case 'SUCCESS':
+        return chalk.green(level);
       case 'WARN':
-        coloredLevel = chalk.yellow(level);
-        break;
+        return chalk.yellow(level);
       case 'ERROR':
-        coloredLevel = chalk.red(level);
-        break;
+        return chalk.red(level);
       default:
-        coloredLevel = level;
+        return level;
     }
+  }
 
-    // Format ID prefix without brackets, after level, with colon
-    const idSuffix = entry.id ? ' ' + chalk.white.bold(entry.id) + ':' : '';
+  private formatIdSuffix(id?: string): string {
+    return id ? ' ' + chalk.white.bold(id) + ':' : '';
+  }
 
-    let output = `${formattedTimestamp}${coloredLevel}${idSuffix} ${entry.message}`;
-
-    // Add meta data if present
+  private extractMetadata(entry: LogEntry): Record<string, any> {
     /* eslint-disable @typescript-eslint/no-unused-vars */
     const {
       level: _level,
@@ -173,55 +225,55 @@ export class Logger {
       ...meta
     } = entry;
     /* eslint-enable @typescript-eslint/no-unused-vars */
-    if (Object.keys(meta).length > 0) {
-      const yamlOutput = yaml
-        .dump(meta, {
-          indent: 2,
-          noRefs: true,
-          lineWidth: -1,
-        })
-        .trim();
-      // Indent each line of YAML by 2 spaces
-      const indentedYaml = yamlOutput
-        .split('\n')
-        .map((line) => `  ${line}`)
-        .join('\n');
+    return meta;
+  }
 
-      // Color error fields red when it's an error-only case
-      if ((entry as any).__isErrorOnly) {
-        // For error-only case, display stack as raw string (not YAML)
-        if (meta.stack) {
-          const indentedStack = meta.stack
-            .split('\n')
-            .map((line: string) => `  ${line}`)
-            .join('\n');
-          output += `\n${chalk.red(indentedStack)}`;
-        }
+  private formatMetadata(meta: Record<string, any>, entry: LogEntry): string {
+    const isErrorOnly = (entry as any).__isErrorOnly;
 
-        // Handle cause if present
-        if (meta.cause) {
-          const causeYaml = yaml
-            .dump(
-              { cause: meta.cause },
-              {
-                indent: 2,
-                noRefs: true,
-                lineWidth: -1,
-              }
-            )
-            .trim();
-          const indentedCause = causeYaml
-            .split('\n')
-            .map((line) => `  ${line}`)
-            .join('\n');
-          output += `\n${chalk.red(indentedCause)}`;
-        }
-      } else {
-        output += `\n${chalk.dim(indentedYaml)}`;
-      }
+    if (isErrorOnly) {
+      return this.formatErrorOnlyMetadata(meta);
     }
 
-    console.log(output);
+    const yamlOutput = this.dumpYaml(meta);
+    const indentedYaml = this.indentLines(yamlOutput);
+    return `\n${chalk.dim(indentedYaml)}`;
+  }
+
+  private formatErrorOnlyMetadata(meta: Record<string, any>): string {
+    let output = '';
+
+    // Format stack as raw string
+    if (meta.stack) {
+      const indentedStack = this.indentLines(meta.stack);
+      output += `\n${chalk.red(indentedStack)}`;
+    }
+
+    // Format cause as YAML
+    if (meta.cause) {
+      const causeYaml = this.dumpYaml({ cause: meta.cause });
+      const indentedCause = this.indentLines(causeYaml);
+      output += `\n${chalk.red(indentedCause)}`;
+    }
+
+    return output;
+  }
+
+  private dumpYaml(data: any): string {
+    return yaml
+      .dump(data, {
+        indent: YAML_INDENT,
+        noRefs: true,
+        lineWidth: -1,
+      })
+      .trim();
+  }
+
+  private indentLines(text: string): string {
+    return text
+      .split('\n')
+      .map((line) => `${OUTPUT_INDENT}${line}`)
+      .join('\n');
   }
 
   private jsonLog(entry: LogEntry): void {
@@ -234,6 +286,10 @@ export class Logger {
 
   info(message: string | Error, meta?: Record<string, any>): void {
     this.log('INFO', message, meta);
+  }
+
+  success(message: string | Error, meta?: Record<string, any>): void {
+    this.log('SUCCESS', message, meta);
   }
 
   warn(message: string | Error, meta?: Record<string, any>): void {
@@ -251,6 +307,7 @@ export const logger = new Logger();
 // Export convenience functions
 export const debug = logger.debug.bind(logger);
 export const info = logger.info.bind(logger);
+export const success = logger.success.bind(logger);
 export const warn = logger.warn.bind(logger);
 export const error = logger.error.bind(logger);
 
