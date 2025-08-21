@@ -17,6 +17,8 @@ A simple logging library with pretty formatting in development and JSONL in prod
 yarn add @skierkowski/logger
 ```
 
+> **Note**: This is an ESM-only module. It requires Node.js 14+ and must be imported using ES module syntax (`import`).
+
 ## Usage
 
 ### Basic Usage
