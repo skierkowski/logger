@@ -12,6 +12,14 @@ logger.info('User registration', {
   verified: true,
 });
 
+console.log('\n=== Metadata Only ===');
+logger.info({
+  userId: 'usr_67890',
+  email: 'newuser@example.com',
+  plan: 'premium',
+  verified: true,
+});
+
 console.log('\n=== Complex Nested Object ===');
 logger.warn('API rate limit exceeded', {
   endpoint: '/api/v1/users',

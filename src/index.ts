@@ -58,7 +58,7 @@ export class Logger {
 
   private log(
     level: LogLevelName,
-    messageOrError: string | Error,
+    messageOrErrorOrMeta: string | Error | Record<string, any>,
     meta: Record<string, any> = {}
   ): void {
     if (LOG_LEVELS[level] < this.level) {
@@ -66,11 +66,11 @@ export class Logger {
     }
 
     const { message, processedMeta } = this.processMessageAndMeta(
-      messageOrError,
+      messageOrErrorOrMeta,
       meta,
       level
     );
-    const entryId = this.determineEntryId(processedMeta, messageOrError);
+    const entryId = this.determineEntryId(processedMeta, messageOrErrorOrMeta);
 
     const entry: LogEntry = {
       level,
@@ -88,21 +88,36 @@ export class Logger {
   }
 
   private processMessageAndMeta(
-    messageOrError: string | Error,
+    messageOrErrorOrMeta: string | Error | Record<string, any>,
     meta: Record<string, any>,
     level: LogLevelName
   ): { message: string; processedMeta: Record<string, any> } {
-    if (!(messageOrError instanceof Error)) {
-      return { message: messageOrError, processedMeta: { ...meta } };
+    // Handle object (non-Error) as metadata with empty message
+    if (
+      typeof messageOrErrorOrMeta === 'object' &&
+      !(messageOrErrorOrMeta instanceof Error) &&
+      messageOrErrorOrMeta !== null
+    ) {
+      return {
+        message: '',
+        processedMeta: { ...messageOrErrorOrMeta, ...meta },
+      };
     }
 
-    const message = messageOrError.message;
+    if (!(messageOrErrorOrMeta instanceof Error)) {
+      return {
+        message: String(messageOrErrorOrMeta),
+        processedMeta: { ...meta },
+      };
+    }
+
+    const message = messageOrErrorOrMeta.message;
     const isErrorOnly = level === 'ERROR' && Object.keys(meta).length === 0;
 
     if (isErrorOnly) {
-      const cause = this.processCause(messageOrError as ErrorWithCause);
+      const cause = this.processCause(messageOrErrorOrMeta as ErrorWithCause);
       const processedMeta: Record<string, any> = {
-        stack: messageOrError.stack,
+        stack: messageOrErrorOrMeta.stack,
         __isErrorOnly: true,
       };
       if (cause) {
@@ -111,11 +126,11 @@ export class Logger {
       return { message, processedMeta };
     }
 
-    const cause = this.extractCause(messageOrError as ErrorWithCause);
+    const cause = this.extractCause(messageOrErrorOrMeta as ErrorWithCause);
     const errorData: Record<string, any> = {
-      name: messageOrError.name,
-      message: messageOrError.message,
-      stack: messageOrError.stack,
+      name: messageOrErrorOrMeta.name,
+      message: messageOrErrorOrMeta.message,
+      stack: messageOrErrorOrMeta.stack,
     };
     if (cause) {
       errorData.cause = cause;
@@ -148,12 +163,12 @@ export class Logger {
 
   private determineEntryId(
     meta: Record<string, any>,
-    messageOrError: string | Error
+    messageOrErrorOrMeta: string | Error | Record<string, any>
   ): string | undefined {
     if (this.id) return this.id;
 
-    if (meta.__isErrorOnly && messageOrError instanceof Error) {
-      return messageOrError.name;
+    if (meta.__isErrorOnly && messageOrErrorOrMeta instanceof Error) {
+      return messageOrErrorOrMeta.name;
     }
 
     return undefined;
@@ -280,24 +295,39 @@ export class Logger {
     console.log(JSON.stringify(entry));
   }
 
-  debug(message: string | Error, meta?: Record<string, any>): void {
-    this.log('DEBUG', message, meta);
+  debug(
+    messageOrMeta: string | Error | Record<string, any>,
+    meta?: Record<string, any>
+  ): void {
+    this.log('DEBUG', messageOrMeta, meta);
   }
 
-  info(message: string | Error, meta?: Record<string, any>): void {
-    this.log('INFO', message, meta);
+  info(
+    messageOrMeta: string | Error | Record<string, any>,
+    meta?: Record<string, any>
+  ): void {
+    this.log('INFO', messageOrMeta, meta);
   }
 
-  success(message: string | Error, meta?: Record<string, any>): void {
-    this.log('SUCCESS', message, meta);
+  success(
+    messageOrMeta: string | Error | Record<string, any>,
+    meta?: Record<string, any>
+  ): void {
+    this.log('SUCCESS', messageOrMeta, meta);
   }
 
-  warn(message: string | Error, meta?: Record<string, any>): void {
-    this.log('WARN', message, meta);
+  warn(
+    messageOrMeta: string | Error | Record<string, any>,
+    meta?: Record<string, any>
+  ): void {
+    this.log('WARN', messageOrMeta, meta);
   }
 
-  error(message: string | Error, meta?: Record<string, any>): void {
-    this.log('ERROR', message, meta);
+  error(
+    messageOrMeta: string | Error | Record<string, any>,
+    meta?: Record<string, any>
+  ): void {
+    this.log('ERROR', messageOrMeta, meta);
   }
 }
 
